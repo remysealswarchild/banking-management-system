@@ -16,18 +16,28 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# Find Qt Widgets. Prefer Qt 6, but allow Qt 5 if Qt 6 is not installed.
+# Find Qt Widgets. Prefer Qt 6, but allow Qt 5 if Qt 6 is installed instead.
 find_package(Qt6 COMPONENTS Widgets QUIET)
-if(NOT Qt6_FOUND)
-    find_package(Qt5 COMPONENTS Widgets REQUIRED)
+if(Qt6_FOUND)
+    set(QT_WIDGETS_LIBRARY Qt6::Widgets)
+else()
+    find_package(Qt5 COMPONENTS Widgets QUIET)
+    if(Qt5_FOUND)
+        set(QT_WIDGETS_LIBRARY Qt5::Widgets)
+    endif()
 endif()
+
+# Backend source files shared by the GUI app and the test executable.
+set(BACKEND_SOURCES
+    src/Account.cpp
+    src/Transaction.cpp
+    src/Bank.cpp
+)
 
 # Source files compiled into the application.
 set(PROJECT_SOURCES
     src/main.cpp
-    src/Account.cpp
-    src/Transaction.cpp
-    src/Bank.cpp
+    ${BACKEND_SOURCES}
     src/MainWindow.cpp
 )
 
@@ -41,18 +51,38 @@ set(PROJECT_HEADERS
     include/MainWindow.h
 )
 
-# Create the desktop application executable.
-add_executable(BankingManagementSystem
-    ${PROJECT_SOURCES}
+# Create the desktop application executable when Qt Widgets is available.
+if(QT_WIDGETS_LIBRARY)
+    add_executable(BankingManagementSystem
+        ${PROJECT_SOURCES}
+        ${PROJECT_HEADERS}
+    )
+
+    # Allow source files to include headers like #include "Account.h".
+    target_include_directories(BankingManagementSystem PRIVATE include)
+
+    # Link the executable with the Qt Widgets library.
+    target_link_libraries(BankingManagementSystem PRIVATE ${QT_WIDGETS_LIBRARY})
+else()
+    message(WARNING "Qt Widgets was not found. BankingManagementSystem will not be built, but BankTests can still be built.")
+endif()
+
+# Simple assert-based backend test executable.
+# This target does not use Qt, so it can test the Bank logic separately from the GUI.
+add_executable(BankTests
+    tests/test_bank.cpp
+    ${BACKEND_SOURCES}
     ${PROJECT_HEADERS}
 )
 
-# Allow source files to include headers like #include "Account.h".
-target_include_directories(BankingManagementSystem PRIVATE include)
+target_include_directories(BankTests PRIVATE include)
 
-# Link the executable with the Qt Widgets library.
-if(Qt6_FOUND)
-    target_link_libraries(BankingManagementSystem PRIVATE Qt6::Widgets)
-else()
-    target_link_libraries(BankingManagementSystem PRIVATE Qt5::Widgets)
-endif()
+# The backend tests do not need Qt's automatic code generation tools.
+set_target_properties(BankTests PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+    AUTORCC OFF
+)
+
+enable_testing()
+add_test(NAME BankTests COMMAND BankTests)
