@@ -86,3 +86,18 @@ set_target_properties(BankTests PROPERTIES
 
 enable_testing()
 add_test(NAME BankTests COMMAND BankTests)
+
+# Small console demo for trying the backend without the Qt GUI.
+add_executable(BankConsoleDemo
+    src/console_demo.cpp
+    ${BACKEND_SOURCES}
+    ${PROJECT_HEADERS}
+)
+
+target_include_directories(BankConsoleDemo PRIVATE include)
+
+set_target_properties(BankConsoleDemo PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+    AUTORCC OFF
+)
