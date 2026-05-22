@@ -8,6 +8,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Qt checks the __cplusplus macro. MSVC needs this flag to report C++17 correctly.
+if(MSVC)
+    add_compile_options(/Zc:__cplusplus /permissive-)
+endif()
+
 # Let CMake run Qt tools automatically when needed.
 # AUTOMOC handles Q_OBJECT classes.
 # AUTOUIC handles .ui form files.
