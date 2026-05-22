@@ -55,6 +55,19 @@ public:
     std::vector<Transaction> getMiniStatement(long accountNumber, int numberOfTransactions) const;
 
     DashboardSummary getDashboardSummary() const;
+
+    void saveAccounts() const;
+    void loadAccounts();
+    void saveTransactions() const;
+    void loadTransactions();
+    void saveAll() const;
+    void loadAll();
+
+    void backupDataFiles() const;
+    void exportAccountsReport(const std::string& filePath) const;
+    void exportTransactionsReport(const std::string& filePath) const;
+    void exportAccountsCsv(const std::string& filePath) const;
+    void exportTransactionsCsv(const std::string& filePath) const;
 };
 
 #endif // BANK_H

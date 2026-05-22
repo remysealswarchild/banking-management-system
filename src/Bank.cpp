@@ -3,10 +3,22 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
+#include <sstream>
 #include <string>
+#include <system_error>
 
 namespace {
+
+const std::filesystem::path DATA_FOLDER = "data";
+const std::filesystem::path BACKUP_FOLDER = "backup";
+const std::filesystem::path REPORTS_FOLDER = "reports";
+const std::filesystem::path ACCOUNTS_FILE = DATA_FOLDER / "accounts.txt";
+const std::filesystem::path TRANSACTIONS_FILE = DATA_FOLDER / "transactions.txt";
+const std::filesystem::path ACCOUNTS_BACKUP_FILE = BACKUP_FOLDER / "accounts_backup.txt";
+const std::filesystem::path TRANSACTIONS_BACKUP_FILE = BACKUP_FOLDER / "transactions_backup.txt";
 
 std::string normalizeSearchText(std::string text)
 {
@@ -21,6 +33,74 @@ std::string normalizeSearchText(std::string text)
     });
 
     return text;
+}
+
+void ensureDataFolderExists()
+{
+    std::error_code error;
+    std::filesystem::create_directories(DATA_FOLDER, error);
+
+    if (error) {
+        throw FileOperationException("Could not create data folder: " + error.message());
+    }
+}
+
+void ensureFolderExists(const std::filesystem::path& folderPath, const std::string& folderName)
+{
+    std::error_code error;
+    std::filesystem::create_directories(folderPath, error);
+
+    if (error) {
+        throw FileOperationException("Could not create " + folderName + " folder: " + error.message());
+    }
+}
+
+std::filesystem::path prepareOutputPath(const std::string& filePath)
+{
+    std::filesystem::path outputPath(filePath);
+    if (outputPath.has_parent_path()) {
+        ensureFolderExists(outputPath.parent_path(), "output");
+    }
+
+    return outputPath;
+}
+
+std::vector<std::string> splitLine(const std::string& line, char delimiter)
+{
+    std::vector<std::string> parts;
+    std::string part;
+    std::stringstream stream(line);
+
+    while (std::getline(stream, part, delimiter)) {
+        parts.push_back(part);
+    }
+
+    return parts;
+}
+
+bool shouldSkipLine(const std::string& line)
+{
+    return line.empty() || line.front() == '#';
+}
+
+std::string csvEscape(const std::string& value)
+{
+    const bool needsQuotes = value.find_first_of(",\"\n") != std::string::npos;
+    if (!needsQuotes) {
+        return value;
+    }
+
+    std::string escapedValue = "\"";
+    for (char ch : value) {
+        if (ch == '"') {
+            escapedValue += "\"\"";
+        } else {
+            escapedValue += ch;
+        }
+    }
+
+    escapedValue += '"';
+    return escapedValue;
 }
 
 } // namespace
@@ -380,4 +460,310 @@ DashboardSummary Bank::getDashboardSummary() const
     }
 
     return summary;
+}
+
+void Bank::saveAccounts() const
+{
+    ensureDataFolderExists();
+
+    std::ofstream outputFile(ACCOUNTS_FILE.string());
+    if (!outputFile) {
+        throw FileOperationException("Could not open data/accounts.txt for writing.");
+    }
+
+    for (const auto& accountPair : accounts) {
+        const Account& account = accountPair.second;
+
+        outputFile << account.getAccountNumber() << '|'
+                   << account.getFirstName() << '|'
+                   << account.getLastName() << '|'
+                   << accountTypeToString(account.getAccountType()) << '|'
+                   << accountStatusToString(account.getStatus()) << '|'
+                   << account.getBalance() << '\n';
+    }
+
+    if (!outputFile) {
+        throw FileOperationException("Could not write account data to data/accounts.txt.");
+    }
+}
+
+void Bank::loadAccounts()
+{
+    ensureDataFolderExists();
+
+    accounts.clear();
+    nextAccountNumber = 1001;
+
+    if (!std::filesystem::exists(ACCOUNTS_FILE)) {
+        return;
+    }
+
+    std::ifstream inputFile(ACCOUNTS_FILE.string());
+    if (!inputFile) {
+        return;
+    }
+
+    std::string line;
+    long highestAccountNumber = 1000;
+
+    while (std::getline(inputFile, line)) {
+        if (shouldSkipLine(line)) {
+            continue;
+        }
+
+        const std::vector<std::string> parts = splitLine(line, '|');
+        if (parts.size() != 6) {
+            continue;
+        }
+
+        try {
+            const long accountNumber = std::stol(parts[0]);
+            const std::string& firstName = parts[1];
+            const std::string& lastName = parts[2];
+            const AccountType accountType = stringToAccountType(parts[3]);
+            const AccountStatus status = stringToAccountStatus(parts[4]);
+            const double balance = std::stod(parts[5]);
+
+            accounts.emplace(accountNumber,
+                             Account(accountNumber,
+                                     firstName,
+                                     lastName,
+                                     accountType,
+                                     balance,
+                                     status));
+
+            highestAccountNumber = std::max(highestAccountNumber, accountNumber);
+        } catch (const std::exception&) {
+            // Keep loading simple: skip invalid records and continue with the rest.
+            continue;
+        }
+    }
+
+    nextAccountNumber = highestAccountNumber + 1;
+}
+
+void Bank::saveTransactions() const
+{
+    ensureDataFolderExists();
+
+    std::ofstream outputFile(TRANSACTIONS_FILE.string());
+    if (!outputFile) {
+        throw FileOperationException("Could not open data/transactions.txt for writing.");
+    }
+
+    for (const Transaction& transaction : transactions) {
+        outputFile << transaction.getTransactionId() << '|'
+                   << transaction.getAccountNumber() << '|'
+                   << transactionTypeToString(transaction.getType()) << '|'
+                   << transaction.getAmount() << '|'
+                   << transaction.getNote() << '|'
+                   << transaction.getDateTime() << '\n';
+    }
+
+    if (!outputFile) {
+        throw FileOperationException("Could not write transaction data to data/transactions.txt.");
+    }
+}
+
+void Bank::loadTransactions()
+{
+    ensureDataFolderExists();
+
+    transactions.clear();
+    nextTransactionId = 1;
+
+    if (!std::filesystem::exists(TRANSACTIONS_FILE)) {
+        return;
+    }
+
+    std::ifstream inputFile(TRANSACTIONS_FILE.string());
+    if (!inputFile) {
+        return;
+    }
+
+    std::string line;
+    long highestTransactionId = 0;
+
+    while (std::getline(inputFile, line)) {
+        if (shouldSkipLine(line)) {
+            continue;
+        }
+
+        const std::vector<std::string> parts = splitLine(line, '|');
+        if (parts.size() != 6) {
+            continue;
+        }
+
+        try {
+            const long transactionId = std::stol(parts[0]);
+            const long accountNumber = std::stol(parts[1]);
+            const TransactionType type = stringToTransactionType(parts[2]);
+            const double amount = std::stod(parts[3]);
+            const std::string& note = parts[4];
+            const std::string& dateTime = parts[5];
+
+            transactions.emplace_back(transactionId, accountNumber, type, amount, note, dateTime);
+            highestTransactionId = std::max(highestTransactionId, transactionId);
+        } catch (const std::exception&) {
+            // Keep loading simple: skip invalid records and continue with the rest.
+            continue;
+        }
+    }
+
+    nextTransactionId = highestTransactionId + 1;
+}
+
+void Bank::saveAll() const
+{
+    saveAccounts();
+    saveTransactions();
+}
+
+void Bank::loadAll()
+{
+    loadAccounts();
+    loadTransactions();
+}
+
+void Bank::backupDataFiles() const
+{
+    ensureFolderExists(BACKUP_FOLDER, "backup");
+
+    std::error_code error;
+
+    if (std::filesystem::exists(ACCOUNTS_FILE)) {
+        std::filesystem::copy_file(ACCOUNTS_FILE,
+                                   ACCOUNTS_BACKUP_FILE,
+                                   std::filesystem::copy_options::overwrite_existing,
+                                   error);
+
+        if (error) {
+            throw FileOperationException("Could not back up data/accounts.txt: " + error.message());
+        }
+    }
+
+    error.clear();
+
+    if (std::filesystem::exists(TRANSACTIONS_FILE)) {
+        std::filesystem::copy_file(TRANSACTIONS_FILE,
+                                   TRANSACTIONS_BACKUP_FILE,
+                                   std::filesystem::copy_options::overwrite_existing,
+                                   error);
+
+        if (error) {
+            throw FileOperationException("Could not back up data/transactions.txt: " + error.message());
+        }
+    }
+}
+
+void Bank::exportAccountsReport(const std::string& filePath) const
+{
+    ensureFolderExists(REPORTS_FOLDER, "reports");
+    const std::filesystem::path outputPath = prepareOutputPath(filePath);
+
+    std::ofstream outputFile(outputPath.string());
+    if (!outputFile) {
+        throw FileOperationException("Could not open account report file for writing: " + filePath);
+    }
+
+    outputFile << "Banking Management System - Accounts Report\n";
+    outputFile << "==========================================\n\n";
+
+    for (const auto& accountPair : accounts) {
+        const Account& account = accountPair.second;
+
+        outputFile << "Account Number: " << account.getAccountNumber() << '\n'
+                   << "Name: " << account.getFullName() << '\n'
+                   << "First Name: " << account.getFirstName() << '\n'
+                   << "Last Name: " << account.getLastName() << '\n'
+                   << "Account Type: " << accountTypeToString(account.getAccountType()) << '\n'
+                   << "Status: " << accountStatusToString(account.getStatus()) << '\n'
+                   << "Balance: " << account.getBalance() << "\n\n";
+    }
+
+    if (!outputFile) {
+        throw FileOperationException("Could not write account report: " + filePath);
+    }
+}
+
+void Bank::exportTransactionsReport(const std::string& filePath) const
+{
+    ensureFolderExists(REPORTS_FOLDER, "reports");
+    const std::filesystem::path outputPath = prepareOutputPath(filePath);
+
+    std::ofstream outputFile(outputPath.string());
+    if (!outputFile) {
+        throw FileOperationException("Could not open transaction report file for writing: " + filePath);
+    }
+
+    outputFile << "Banking Management System - Transactions Report\n";
+    outputFile << "===============================================\n\n";
+
+    for (const Transaction& transaction : transactions) {
+        outputFile << "Transaction ID: " << transaction.getTransactionId() << '\n'
+                   << "Account Number: " << transaction.getAccountNumber() << '\n'
+                   << "Type: " << transactionTypeToString(transaction.getType()) << '\n'
+                   << "Amount: " << transaction.getAmount() << '\n'
+                   << "Note: " << transaction.getNote() << '\n'
+                   << "Date/Time: " << transaction.getDateTime() << "\n\n";
+    }
+
+    if (!outputFile) {
+        throw FileOperationException("Could not write transaction report: " + filePath);
+    }
+}
+
+void Bank::exportAccountsCsv(const std::string& filePath) const
+{
+    ensureFolderExists(REPORTS_FOLDER, "reports");
+    const std::filesystem::path outputPath = prepareOutputPath(filePath);
+
+    std::ofstream outputFile(outputPath.string());
+    if (!outputFile) {
+        throw FileOperationException("Could not open accounts CSV file for writing: " + filePath);
+    }
+
+    outputFile << "account_number,first_name,last_name,full_name,account_type,status,balance\n";
+
+    for (const auto& accountPair : accounts) {
+        const Account& account = accountPair.second;
+
+        outputFile << account.getAccountNumber() << ','
+                   << csvEscape(account.getFirstName()) << ','
+                   << csvEscape(account.getLastName()) << ','
+                   << csvEscape(account.getFullName()) << ','
+                   << accountTypeToString(account.getAccountType()) << ','
+                   << accountStatusToString(account.getStatus()) << ','
+                   << account.getBalance() << '\n';
+    }
+
+    if (!outputFile) {
+        throw FileOperationException("Could not write accounts CSV file: " + filePath);
+    }
+}
+
+void Bank::exportTransactionsCsv(const std::string& filePath) const
+{
+    ensureFolderExists(REPORTS_FOLDER, "reports");
+    const std::filesystem::path outputPath = prepareOutputPath(filePath);
+
+    std::ofstream outputFile(outputPath.string());
+    if (!outputFile) {
+        throw FileOperationException("Could not open transactions CSV file for writing: " + filePath);
+    }
+
+    outputFile << "transaction_id,account_number,type,amount,note,date_time\n";
+
+    for (const Transaction& transaction : transactions) {
+        outputFile << transaction.getTransactionId() << ','
+                   << transaction.getAccountNumber() << ','
+                   << transactionTypeToString(transaction.getType()) << ','
+                   << transaction.getAmount() << ','
+                   << csvEscape(transaction.getNote()) << ','
+                   << csvEscape(transaction.getDateTime()) << '\n';
+    }
+
+    if (!outputFile) {
+        throw FileOperationException("Could not write transactions CSV file: " + filePath);
+    }
 }
