@@ -1,7 +1,13 @@
-// Placeholder application entry point for the Qt banking management system.
+#include "MainWindow.h"
 
-int main()
+#include <QApplication>
+
+int main(int argc, char* argv[])
 {
-    return 0;
-}
+    QApplication application(argc, argv);
 
+    MainWindow window;
+    window.show();
+
+    return application.exec();
+}
