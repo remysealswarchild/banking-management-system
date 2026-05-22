@@ -1,0 +1,58 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+out/
+bin/
+obj/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+install_manifest.txt
+
+# Qt generated files
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.moc
+.qmake.stash
+
+# Generated binaries and libraries
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+*.o
+*.obj
+*.app
+
+# Debug and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# IDE settings
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
