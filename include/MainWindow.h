@@ -6,6 +6,8 @@
 #include <QMainWindow>
 #include <QString>
 
+#include <vector>
+
 class QLabel;
 class QComboBox;
 class QLineEdit;
@@ -31,6 +33,15 @@ private:
     QLineEdit* lastNameEdit;
     QComboBox* accountTypeCombo;
     QLineEdit* initialBalanceEdit;
+    QLineEdit* searchNameEdit;
+    QComboBox* sortAccountsCombo;
+    QComboBox* filterAccountTypeCombo;
+    QLineEdit* minBalanceEdit;
+    QLineEdit* maxBalanceEdit;
+    QLineEdit* transactionAccountFilterEdit;
+    QComboBox* transactionTypeFilterCombo;
+    QLineEdit* miniStatementAccountEdit;
+    QLineEdit* miniStatementCountEdit;
     QLineEdit* depositAccountNumberEdit;
     QLineEdit* depositAmountEdit;
     QLineEdit* depositNoteEdit;
@@ -54,7 +65,18 @@ private:
     void refreshDashboard();
     void refreshAccountsTable();
     void refreshTransactionsTable();
+    void displayAccounts(const std::vector<Account>& accounts);
+    void displayTransactions(const std::vector<Transaction>& transactions);
     void handleCreateAccount();
+    void handleSearchAccounts();
+    void handleSortAccounts();
+    void handleFilterAccountsByType();
+    void handleFilterAccountsByBalanceRange();
+    void handleResetAccountsTable();
+    void handleShowAllTransactions();
+    void handleFilterTransactionsByAccount();
+    void handleFilterTransactionsByType();
+    void handleMiniStatement();
     void handleDeposit();
     void handleWithdraw();
     void handleTransfer();

@@ -30,6 +30,15 @@ MainWindow::MainWindow(QWidget* parent)
       lastNameEdit(nullptr),
       accountTypeCombo(nullptr),
       initialBalanceEdit(nullptr),
+      searchNameEdit(nullptr),
+      sortAccountsCombo(nullptr),
+      filterAccountTypeCombo(nullptr),
+      minBalanceEdit(nullptr),
+      maxBalanceEdit(nullptr),
+      transactionAccountFilterEdit(nullptr),
+      transactionTypeFilterCombo(nullptr),
+      miniStatementAccountEdit(nullptr),
+      miniStatementCountEdit(nullptr),
       depositAccountNumberEdit(nullptr),
       depositAmountEdit(nullptr),
       depositNoteEdit(nullptr),
@@ -86,36 +95,69 @@ QWidget* MainWindow::createAccountsTab()
 {
     QWidget* tab = new QWidget(this);
     QVBoxLayout* mainLayout = new QVBoxLayout(tab);
-    QGridLayout* formLayout = new QGridLayout();
+
+    QGroupBox* createAccountGroup = new QGroupBox("Create Account", tab);
+    QGridLayout* createLayout = new QGridLayout(createAccountGroup);
 
     firstNameEdit = new QLineEdit(tab);
     lastNameEdit = new QLineEdit(tab);
-    QLineEdit* searchEdit = new QLineEdit(tab);
     accountTypeCombo = new QComboBox(tab);
     initialBalanceEdit = new QLineEdit(tab);
     QPushButton* createButton = new QPushButton("Create Account", tab);
-    QPushButton* searchButton = new QPushButton("Search", tab);
 
     accountTypeCombo->addItems(QStringList {"Savings", "Current", "Student"});
     initialBalanceEdit->setPlaceholderText("0.00");
 
-    formLayout->addWidget(new QLabel("First Name:", tab), 0, 0);
-    formLayout->addWidget(firstNameEdit, 0, 1);
-    formLayout->addWidget(new QLabel("Last Name:", tab), 0, 2);
-    formLayout->addWidget(lastNameEdit, 0, 3);
-    formLayout->addWidget(new QLabel("Account Type:", tab), 1, 0);
-    formLayout->addWidget(accountTypeCombo, 1, 1);
-    formLayout->addWidget(new QLabel("Initial Balance:", tab), 1, 2);
-    formLayout->addWidget(initialBalanceEdit, 1, 3);
-    formLayout->addWidget(createButton, 2, 0, 1, 4);
-    formLayout->addWidget(new QLabel("Search Name:", tab), 3, 0);
-    formLayout->addWidget(searchEdit, 3, 1, 1, 2);
-    formLayout->addWidget(searchButton, 3, 3);
+    createLayout->addWidget(new QLabel("First Name:", createAccountGroup), 0, 0);
+    createLayout->addWidget(firstNameEdit, 0, 1);
+    createLayout->addWidget(new QLabel("Last Name:", createAccountGroup), 0, 2);
+    createLayout->addWidget(lastNameEdit, 0, 3);
+    createLayout->addWidget(new QLabel("Account Type:", createAccountGroup), 1, 0);
+    createLayout->addWidget(accountTypeCombo, 1, 1);
+    createLayout->addWidget(new QLabel("Initial Balance:", createAccountGroup), 1, 2);
+    createLayout->addWidget(initialBalanceEdit, 1, 3);
+    createLayout->addWidget(createButton, 2, 0, 1, 4);
+
+    QGroupBox* accountToolsGroup = new QGroupBox("Search, Sort, and Filter", tab);
+    QGridLayout* toolsLayout = new QGridLayout(accountToolsGroup);
+
+    searchNameEdit = new QLineEdit(accountToolsGroup);
+    sortAccountsCombo = new QComboBox(accountToolsGroup);
+    filterAccountTypeCombo = new QComboBox(accountToolsGroup);
+    minBalanceEdit = new QLineEdit(accountToolsGroup);
+    maxBalanceEdit = new QLineEdit(accountToolsGroup);
+    QPushButton* searchButton = new QPushButton("Search", accountToolsGroup);
+    QPushButton* sortButton = new QPushButton("Sort", accountToolsGroup);
+    QPushButton* filterTypeButton = new QPushButton("Filter Type", accountToolsGroup);
+    QPushButton* filterBalanceButton = new QPushButton("Filter Balance", accountToolsGroup);
+    QPushButton* resetButton = new QPushButton("Show All Accounts", accountToolsGroup);
+
+    searchNameEdit->setPlaceholderText("Customer name");
+    sortAccountsCombo->addItems(QStringList {"Sort by name", "Sort by balance"});
+    filterAccountTypeCombo->addItems(QStringList {"Savings", "Current", "Student"});
+    minBalanceEdit->setPlaceholderText("Minimum");
+    maxBalanceEdit->setPlaceholderText("Maximum");
+
+    toolsLayout->addWidget(new QLabel("Search Name:", accountToolsGroup), 0, 0);
+    toolsLayout->addWidget(searchNameEdit, 0, 1);
+    toolsLayout->addWidget(searchButton, 0, 2);
+    toolsLayout->addWidget(new QLabel("Sort Accounts:", accountToolsGroup), 1, 0);
+    toolsLayout->addWidget(sortAccountsCombo, 1, 1);
+    toolsLayout->addWidget(sortButton, 1, 2);
+    toolsLayout->addWidget(new QLabel("Account Type:", accountToolsGroup), 2, 0);
+    toolsLayout->addWidget(filterAccountTypeCombo, 2, 1);
+    toolsLayout->addWidget(filterTypeButton, 2, 2);
+    toolsLayout->addWidget(new QLabel("Balance Range:", accountToolsGroup), 3, 0);
+    toolsLayout->addWidget(minBalanceEdit, 3, 1);
+    toolsLayout->addWidget(maxBalanceEdit, 3, 2);
+    toolsLayout->addWidget(filterBalanceButton, 3, 3);
+    toolsLayout->addWidget(resetButton, 4, 0, 1, 4);
 
     accountsTable = new QTableWidget(tab);
     setupAccountTable();
 
-    mainLayout->addLayout(formLayout);
+    mainLayout->addWidget(createAccountGroup);
+    mainLayout->addWidget(accountToolsGroup);
     mainLayout->addWidget(accountsTable);
 
     connect(createButton, &QPushButton::clicked, this, [this]() {
@@ -123,7 +165,23 @@ QWidget* MainWindow::createAccountsTab()
     });
 
     connect(searchButton, &QPushButton::clicked, this, [this]() {
-        showPlaceholderMessage("Search Account");
+        handleSearchAccounts();
+    });
+
+    connect(sortButton, &QPushButton::clicked, this, [this]() {
+        handleSortAccounts();
+    });
+
+    connect(filterTypeButton, &QPushButton::clicked, this, [this]() {
+        handleFilterAccountsByType();
+    });
+
+    connect(filterBalanceButton, &QPushButton::clicked, this, [this]() {
+        handleFilterAccountsByBalanceRange();
+    });
+
+    connect(resetButton, &QPushButton::clicked, this, [this]() {
+        handleResetAccountsTable();
     });
 
     return tab;
@@ -133,35 +191,56 @@ QWidget* MainWindow::createTransactionsTab()
 {
     QWidget* tab = new QWidget(this);
     QVBoxLayout* mainLayout = new QVBoxLayout(tab);
-    QHBoxLayout* filterLayout = new QHBoxLayout();
 
-    QLineEdit* accountNumberEdit = new QLineEdit(tab);
-    QComboBox* transactionTypeCombo = new QComboBox(tab);
-    QPushButton* filterButton = new QPushButton("Filter", tab);
-    QPushButton* refreshButton = new QPushButton("Refresh", tab);
+    QGroupBox* transactionToolsGroup = new QGroupBox("Transaction History", tab);
+    QGridLayout* toolsLayout = new QGridLayout(transactionToolsGroup);
 
-    accountNumberEdit->setPlaceholderText("Account number");
-    transactionTypeCombo->addItems(QStringList {"All", "CreateAccount", "Deposit", "Withdraw", "TransferOut", "TransferIn", "CloseAccount", "UpdateAccount"});
+    transactionAccountFilterEdit = new QLineEdit(transactionToolsGroup);
+    transactionTypeFilterCombo = new QComboBox(transactionToolsGroup);
+    miniStatementAccountEdit = new QLineEdit(transactionToolsGroup);
+    miniStatementCountEdit = new QLineEdit(transactionToolsGroup);
+    QPushButton* showAllButton = new QPushButton("Show All Transactions", transactionToolsGroup);
+    QPushButton* filterAccountButton = new QPushButton("Show Account Transactions", transactionToolsGroup);
+    QPushButton* filterTypeButton = new QPushButton("Filter Type", transactionToolsGroup);
+    QPushButton* miniStatementButton = new QPushButton("Show Mini Statement", transactionToolsGroup);
 
-    filterLayout->addWidget(new QLabel("Account:", tab));
-    filterLayout->addWidget(accountNumberEdit);
-    filterLayout->addWidget(new QLabel("Type:", tab));
-    filterLayout->addWidget(transactionTypeCombo);
-    filterLayout->addWidget(filterButton);
-    filterLayout->addWidget(refreshButton);
+    transactionAccountFilterEdit->setPlaceholderText("Account number");
+    transactionTypeFilterCombo->addItems(QStringList {"CreateAccount", "Deposit", "Withdraw", "TransferOut", "TransferIn", "CloseAccount", "UpdateAccount"});
+    miniStatementAccountEdit->setPlaceholderText("Account number");
+    miniStatementCountEdit->setPlaceholderText("Number of latest transactions");
+
+    toolsLayout->addWidget(new QLabel("Account:", transactionToolsGroup), 0, 0);
+    toolsLayout->addWidget(transactionAccountFilterEdit, 0, 1);
+    toolsLayout->addWidget(filterAccountButton, 0, 2);
+    toolsLayout->addWidget(new QLabel("Transaction Type:", transactionToolsGroup), 1, 0);
+    toolsLayout->addWidget(transactionTypeFilterCombo, 1, 1);
+    toolsLayout->addWidget(filterTypeButton, 1, 2);
+    toolsLayout->addWidget(new QLabel("Mini Statement:", transactionToolsGroup), 2, 0);
+    toolsLayout->addWidget(miniStatementAccountEdit, 2, 1);
+    toolsLayout->addWidget(miniStatementCountEdit, 2, 2);
+    toolsLayout->addWidget(miniStatementButton, 2, 3);
+    toolsLayout->addWidget(showAllButton, 3, 0, 1, 4);
 
     transactionsTable = new QTableWidget(tab);
     setupTransactionTable();
 
-    mainLayout->addLayout(filterLayout);
+    mainLayout->addWidget(transactionToolsGroup);
     mainLayout->addWidget(transactionsTable);
 
-    connect(filterButton, &QPushButton::clicked, this, [this]() {
-        showPlaceholderMessage("Filter Transactions");
+    connect(showAllButton, &QPushButton::clicked, this, [this]() {
+        handleShowAllTransactions();
     });
 
-    connect(refreshButton, &QPushButton::clicked, this, [this]() {
-        refreshTransactionsTable();
+    connect(filterAccountButton, &QPushButton::clicked, this, [this]() {
+        handleFilterTransactionsByAccount();
+    });
+
+    connect(filterTypeButton, &QPushButton::clicked, this, [this]() {
+        handleFilterTransactionsByType();
+    });
+
+    connect(miniStatementButton, &QPushButton::clicked, this, [this]() {
+        handleMiniStatement();
     });
 
     return tab;
@@ -337,7 +416,14 @@ void MainWindow::refreshAccountsTable()
         return;
     }
 
-    const std::vector<Account> accounts = bank.getAllAccounts();
+    displayAccounts(bank.getAllAccounts());
+}
+
+void MainWindow::displayAccounts(const std::vector<Account>& accounts)
+{
+    if (accountsTable == nullptr) {
+        return;
+    }
 
     accountsTable->setRowCount(static_cast<int>(accounts.size()));
 
@@ -358,7 +444,14 @@ void MainWindow::refreshTransactionsTable()
         return;
     }
 
-    const std::vector<Transaction> transactions = bank.getAllTransactions();
+    displayTransactions(bank.getAllTransactions());
+}
+
+void MainWindow::displayTransactions(const std::vector<Transaction>& transactions)
+{
+    if (transactionsTable == nullptr) {
+        return;
+    }
 
     transactionsTable->setRowCount(static_cast<int>(transactions.size()));
 
@@ -407,6 +500,123 @@ void MainWindow::handleCreateAccount()
                                      + QString::number(accountNumber));
     } catch (const std::exception& exception) {
         QMessageBox::critical(this, "Create Account Failed", exception.what());
+    }
+}
+
+void MainWindow::handleSearchAccounts()
+{
+    const QString searchText = searchNameEdit->text().trimmed();
+
+    if (searchText.isEmpty()) {
+        QMessageBox::warning(this, "Invalid Input", "Please enter a name to search.");
+        return;
+    }
+
+    try {
+        displayAccounts(bank.searchAccountsByName(searchText.toStdString()));
+    } catch (const std::exception& exception) {
+        QMessageBox::critical(this, "Search Failed", exception.what());
+    }
+}
+
+void MainWindow::handleSortAccounts()
+{
+    try {
+        if (sortAccountsCombo->currentText() == "Sort by name") {
+            displayAccounts(bank.getAccountsSortedByName());
+        } else {
+            displayAccounts(bank.getAccountsSortedByBalance());
+        }
+    } catch (const std::exception& exception) {
+        QMessageBox::critical(this, "Sort Failed", exception.what());
+    }
+}
+
+void MainWindow::handleFilterAccountsByType()
+{
+    try {
+        const AccountType accountType = stringToAccountType(filterAccountTypeCombo->currentText().toStdString());
+        displayAccounts(bank.filterAccountsByType(accountType));
+    } catch (const std::exception& exception) {
+        QMessageBox::critical(this, "Filter Failed", exception.what());
+    }
+}
+
+void MainWindow::handleFilterAccountsByBalanceRange()
+{
+    double minimumBalance = 0.0;
+    double maximumBalance = 0.0;
+
+    if (!readDoubleInput(minBalanceEdit, "minimum balance", minimumBalance)
+        || !readDoubleInput(maxBalanceEdit, "maximum balance", maximumBalance)) {
+        return;
+    }
+
+    try {
+        displayAccounts(bank.filterAccountsByBalanceRange(minimumBalance, maximumBalance));
+    } catch (const std::exception& exception) {
+        QMessageBox::critical(this, "Filter Failed", exception.what());
+    }
+}
+
+void MainWindow::handleResetAccountsTable()
+{
+    searchNameEdit->clear();
+    minBalanceEdit->clear();
+    maxBalanceEdit->clear();
+    sortAccountsCombo->setCurrentIndex(0);
+    filterAccountTypeCombo->setCurrentIndex(0);
+    refreshAccountsTable();
+}
+
+void MainWindow::handleShowAllTransactions()
+{
+    transactionAccountFilterEdit->clear();
+    miniStatementAccountEdit->clear();
+    miniStatementCountEdit->clear();
+    transactionTypeFilterCombo->setCurrentIndex(0);
+    refreshTransactionsTable();
+}
+
+void MainWindow::handleFilterTransactionsByAccount()
+{
+    long accountNumber = 0;
+
+    if (!readLongInput(transactionAccountFilterEdit, "account number", accountNumber)) {
+        return;
+    }
+
+    try {
+        displayTransactions(bank.getTransactionsForAccount(accountNumber));
+    } catch (const std::exception& exception) {
+        QMessageBox::critical(this, "Transaction Filter Failed", exception.what());
+    }
+}
+
+void MainWindow::handleFilterTransactionsByType()
+{
+    try {
+        const TransactionType transactionType = stringToTransactionType(transactionTypeFilterCombo->currentText().toStdString());
+        displayTransactions(bank.getTransactionsByType(transactionType));
+    } catch (const std::exception& exception) {
+        QMessageBox::critical(this, "Transaction Filter Failed", exception.what());
+    }
+}
+
+void MainWindow::handleMiniStatement()
+{
+    long accountNumber = 0;
+    long transactionCount = 0;
+
+    if (!readLongInput(miniStatementAccountEdit, "account number", accountNumber)
+        || !readLongInput(miniStatementCountEdit, "number of transactions", transactionCount)) {
+        return;
+    }
+
+    try {
+        displayTransactions(bank.getMiniStatement(accountNumber, static_cast<int>(transactionCount)));
+    } catch (const std::exception& exception) {
+        QMessageBox::critical(this, "Mini Statement Failed", exception.what());
     }
 }
 
